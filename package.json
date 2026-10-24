@@ -1,0 +1,17 @@
+{
+  "name": "axiom-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "AXIOM BOT - free-tier friendly WhatsApp bot (Baileys)",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@whiskeysockets/baileys": "latest",
+    "mongodb": "^6.10.0"
+  }
+}
