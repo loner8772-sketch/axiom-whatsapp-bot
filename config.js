@@ -21,6 +21,7 @@ export function loadConfig(env = process.env) {
     pairingNumber: digits(env.PAIRING_NUMBER || '') || ownerNumber,
     geminiKey: env.GEMINI_API_KEY || '',
     geminiModel: env.GEMINI_MODEL || 'gemini-2.5-flash',
+    jamendoClientId: env.JAMENDO_CLIENT_ID || '',
     novadashNotes: env.NOVADASH_NOTES || '',
     selfPingUrl: selfPing.replace(/\/+$/, ''),
     logLevel: env.LOG_LEVEL || 'info',

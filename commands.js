@@ -3,6 +3,7 @@ import { formatUptime } from './text.js';
 import { extractText, mediaOf } from './message.js';
 import { parseAiArgs, parseStudy, STUDY_SUBJECTS, AiError } from './ai.js';
 import { containsLink } from './links.js';
+import { searchMusic, searchFullTrack } from './music.js';
 
 const isOwnerIdent = (deps, ident) => overlaps(ident, deps.ownerIdent) || overlaps(ident, deps.selfIdent());
 
@@ -75,7 +76,7 @@ const MENU = (p, name) => `╭─『 *${name}* 』
 │ ${p}block ${p}unblock ${p}autoreply
 │
 │ *Media*
-│ ${p}vv
+│ ${p}play ${p}vv
 ╰ Type *${p}help <command>* for details`;
 
 export const COMMANDS = [
@@ -268,6 +269,42 @@ Node: ${process.version}`);
       if (sub === 'clear') { s.clearAutoreply(ctx.chat); return ctx.reply('🧹 Autoreply cleared for this chat.'); }
       const rules = ar.rules.map((r) => `• ${r.k} → ${r.r}`).join('\n') || '(no rules)';
       return ctx.reply(`💬 Autoreply is *${ar.on ? 'ON' : 'OFF'}*\n${rules}${ar.default ? `\nDefault: ${ar.default}` : ''}`);
+    } },
+
+  { name: 'play', desc: 'Find a song: cover photo + audio', usage: 'play <song name or artist>',
+    extra: 'Full tracks come from Jamendo (artist-shared music) when available; otherwise a 30s official preview. Copyrighted songs are not downloaded.',
+    run: async (ctx) => {
+      if (!ctx.rest) return ctx.reply('Usage: *.play <song or artist>*, e.g. *.play burna boy last last*');
+      if (!ctx.isOwner) {
+        const l = ctx.deps.playLimiter.hit(ctx.sender.key);
+        if (!l.ok) return ctx.reply(`⏳ Try again in ${Math.ceil(l.retryAfterMs / 1000)}s.`);
+      }
+      const send = async (content) => { const m = await ctx.sock.sendMessage(ctx.chat, content, { quoted: ctx.msg }); ctx.deps.sentIds.add(m?.key?.id); };
+      let full = null;
+      try { full = await searchFullTrack(ctx.rest, ctx.deps.config.jamendoClientId, ctx.deps.fetchImpl); } catch (e) { ctx.deps.log.warn('full track search failed', e); }
+      if (full) {
+        const cap = `🎵 *${full.title}*\n👤 ${full.artist}${full.album ? `\n💿 ${full.album}` : ''}\n_Full track, shared by the artist (Jamendo)_`;
+        try {
+          if (full.cover) await send({ image: { url: full.cover }, caption: cap }); else await ctx.reply(cap);
+          await send({ audio: { url: full.audio }, mimetype: 'audio/mpeg', ptt: false });
+          return;
+        } catch (e) { ctx.deps.log.warn('full track send failed', e); }
+      }
+      let song;
+      try { song = await searchMusic(ctx.rest, ctx.deps.fetchImpl); } catch (e) {
+        ctx.deps.log.warn('music search failed', e);
+        return ctx.reply('⚠️ Music search is unavailable right now. Try again shortly.');
+      }
+      if (!song) return ctx.reply(`😕 No results for "${ctx.rest}".`);
+      const caption = `🎵 *${song.title}*\n👤 ${song.artist}${song.album ? `\n💿 ${song.album}` : ''}\n_30s preview only: the full song is not available from free legal sources._`;
+      try {
+        if (song.cover) await send({ image: { url: song.cover }, caption }); else await ctx.reply(caption);
+        if (song.preview) await send({ audio: { url: song.preview }, mimetype: 'audio/mp4', ptt: false });
+        else await ctx.reply('No audio preview is available for this track.');
+      } catch (e) {
+        ctx.deps.log.warn('play send failed', e);
+        await ctx.reply(`${caption}\n\n⚠️ Could not attach the media.`);
+      }
     } },
 
   { name: 'vv', desc: 'Re-send a view-once media as normal media (consent-based)', usage: 'vv (reply to the view-once)',
